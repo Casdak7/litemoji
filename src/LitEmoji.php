@@ -19,6 +19,7 @@ class LitEmoji
     private static $shortcodes = [];
     private static $shortcodeCodepoints = [];
     private static $shortcodeEntities = [];
+    private static $shortcodeUTF16 = [];
     private static $entityCodepoints = [];
     private static $excludedShortcodes = [];
 
@@ -149,6 +150,14 @@ class LitEmoji
         return $replacement;
     }
 
+    public static function encodeUTF16($content)
+    {
+        $content = self::unicodeToShortcode($content);
+        $content = self::shortcodeToUTF16($content);
+
+        return $content;
+    }
+
     /**
      * Converts plain text shortcodes to HTML entities.
      *
@@ -157,6 +166,11 @@ class LitEmoji
      */
     public static function shortcodeToEntities($content) {
         $replacements = self::getShortcodeEntities();
+        return str_replace(array_keys($replacements), $replacements, $content);
+    }
+
+    public static function shortcodeToUTF16($content) {
+        $replacements = self::getShortcodeUTF16();
         return str_replace(array_keys($replacements), $replacements, $content);
     }
 
@@ -256,6 +270,34 @@ class LitEmoji
 
             foreach ($parts as $part) {
                 self::$shortcodeEntities[':' . $shortcode . ':'] .= '&#x' . $part .';';
+            }
+        }
+
+        return self::$shortcodeEntities;
+    }
+
+    private static function getShortcodeUTF16()
+    {
+        if (!empty(self::$shortcodeEntities)) {
+            return self::$shortcodeEntities;
+        }
+
+        foreach (self::getShortcodes() as $shortcode => $codepoint) {
+            $parts = explode('-', $codepoint);
+            self::$shortcodeEntities[':' . $shortcode . ':'] = '';
+
+            foreach ($parts as $part) {
+                $codePlace = hexdec($part);
+                // $codePlace = hexdec('0x'.$part);
+                // dump($codePlace);
+                // $codePlace = dechex($codePlace);
+                // dd($codePlace);
+                $highSurrogate = floor(($codePlace - 0x10000) / 0x400) + 0xD800;
+                $lowSurrogate = ($codePlace - 0x10000) % 0x400 + 0xDC00;
+                $surrogatePair = "\\u". dechex($highSurrogate) . "\\u" . dechex($lowSurrogate);
+
+                //self::$shortcodeEntities[':' . $shortcode . ':'] .= '&#x' . $part .';';
+                self::$shortcodeEntities[':' . $shortcode . ':'] .= $surrogatePair;
             }
         }
 
